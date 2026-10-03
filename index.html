@@ -1,0 +1,1621 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vision Frame System</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --cyan: #4df1ff;
+      --cyan-dim: #1c8193;
+      --green: #70ffad;
+      --orange: #ffab61;
+      --red: #ff6262;
+      --bg: #020608;
+      --panel: rgba(5, 18, 24, .78);
+      --edge: rgba(77, 241, 255, .32);
+      --display: Orbitron, "Segoe UI", sans-serif;
+      --mono: "Share Tech Mono", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: #edfaff;
+      font-family: var(--mono);
+      user-select: none;
+    }
+
+    button, input { font: inherit; }
+    .hidden { display: none !important; }
+
+    .screen {
+      position: fixed;
+      inset: 0;
+    }
+
+    #camera-wrap {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #webcam,
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #webcam {
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    canvas { pointer-events: none; }
+
+    .hud {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .hud button,
+    .mode-chip {
+      pointer-events: auto;
+    }
+
+    .scanlines {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(77, 241, 255, .04) 0 1px,
+        transparent 1px 3px
+      );
+      mix-blend-mode: screen;
+    }
+
+    .topbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, .78), transparent);
+      pointer-events: none;
+    }
+
+    .topbar > * { pointer-events: auto; }
+
+    .brand {
+      color: var(--cyan);
+      font-family: var(--display);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-shadow: 0 0 14px rgba(77, 241, 255, .55);
+    }
+
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mini {
+      color: var(--cyan);
+      font-size: 11px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .icon-btn,
+    .hud-btn,
+    .toggle {
+      border: 1px solid var(--edge);
+      border-radius: 2px;
+      background: rgba(77, 241, 255, .08);
+      color: var(--cyan);
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: .18s ease;
+    }
+
+    .icon-btn {
+      width: 33px;
+      height: 33px;
+      font-size: 15px;
+    }
+
+    .hud-btn {
+      padding: 8px 12px;
+      font-size: 10px;
+    }
+
+    .icon-btn:hover,
+    .hud-btn:hover,
+    .mode-chip:hover,
+    .toggle:hover {
+      border-color: var(--cyan);
+      background: rgba(77, 241, 255, .22);
+      box-shadow: 0 0 13px rgba(77, 241, 255, .38);
+    }
+
+    .mode-display {
+      position: absolute;
+      top: 57px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      color: var(--cyan-dim);
+      font-size: 10px;
+      letter-spacing: 4px;
+    }
+
+    .mode-display h1 {
+      margin: 4px 0;
+      color: #f1fcff;
+      font: 800 22px var(--display);
+      letter-spacing: 3px;
+      white-space: nowrap;
+      text-shadow: 0 0 18px rgba(77, 241, 255, .55);
+    }
+
+    .mode-subtitle {
+      color: var(--cyan);
+      font-size: 10px;
+      letter-spacing: 2px;
+    }
+
+    .panel {
+      position: absolute;
+      min-width: 190px;
+      padding: 11px 14px;
+      border: 1px solid var(--edge);
+      border-radius: 3px;
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      font-size: 11px;
+      letter-spacing: .4px;
+    }
+
+    .tracking-panel { top: 96px; left: 18px; }
+    .frame-panel { top: 96px; right: 18px; }
+    .diagnostic-panel { right: 18px; bottom: 123px; min-width: 150px; }
+
+    .panel-title {
+      margin-bottom: 7px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--edge);
+      color: var(--cyan);
+      font: 600 10px var(--display);
+      letter-spacing: 1.8px;
+    }
+
+    .line {
+      margin: 4px 0;
+      color: rgba(235, 250, 252, .86);
+    }
+
+    .line b {
+      color: var(--cyan);
+      font-weight: normal;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 5px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+
+    .dot.locked {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    .mode-chips {
+      position: absolute;
+      bottom: 70px;
+      left: 50%;
+      display: flex;
+      gap: 7px;
+      transform: translateX(-50%);
+      pointer-events: auto;
+    }
+
+    .mode-chip {
+      width: 31px;
+      height: 31px;
+      padding: 0;
+      border: 1px solid var(--edge);
+      border-radius: 2px;
+      background: var(--panel);
+      color: var(--cyan-dim);
+      cursor: pointer;
+      font: 10px var(--mono);
+    }
+
+    .mode-chip.active {
+      border-color: var(--cyan);
+      background: rgba(77, 241, 255, .24);
+      color: var(--cyan);
+      box-shadow: 0 0 13px rgba(77, 241, 255, .58);
+      font-weight: bold;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 18px;
+      left: 18px;
+      display: flex;
+      gap: 8px;
+    }
+
+    #error-screen,
+    #settings-screen {
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      background: rgba(2, 6, 8, .9);
+      backdrop-filter: blur(7px);
+    }
+
+    .error-box,
+    .settings-box {
+      width: min(520px, 92vw);
+      border: 1px solid var(--edge);
+      border-radius: 4px;
+      background: var(--panel);
+      box-shadow: 0 0 40px rgba(0, 0, 0, .85);
+    }
+
+    .error-box {
+      max-width: 440px;
+      padding: 38px 42px;
+      border-color: var(--red);
+      background: rgba(255, 98, 98, .1);
+      text-align: center;
+    }
+
+    .error-title {
+      margin: 12px 0;
+      color: var(--red);
+      font: 800 18px var(--display);
+      letter-spacing: 2px;
+    }
+
+    .error-body {
+      color: rgba(238, 248, 251, .86);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .settings-box {
+      max-height: 84vh;
+      overflow: auto;
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--edge);
+    }
+
+    .settings-title {
+      color: var(--cyan);
+      font: 800 15px var(--display);
+      letter-spacing: 3px;
+    }
+
+    .settings-body { padding: 17px 18px; }
+    .settings-group { margin-bottom: 20px; }
+
+    .settings-group-title {
+      margin-bottom: 9px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid rgba(77, 241, 255, .15);
+      color: var(--cyan-dim);
+      font-size: 10px;
+      letter-spacing: 2px;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+
+    .settings-row input {
+      width: 160px;
+      accent-color: var(--cyan);
+    }
+
+    .toggle {
+      min-width: 46px;
+      padding: 4px 10px;
+      font-size: 10px;
+    }
+
+    .toggle.on {
+      border-color: var(--cyan);
+      background: rgba(77, 241, 255, .23);
+      color: var(--cyan);
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 30;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      border: 1px solid var(--cyan);
+      border-radius: 3px;
+      background: rgba(5, 18, 24, .95);
+      color: var(--cyan);
+      font-size: 11px;
+      letter-spacing: 1px;
+      pointer-events: none;
+    }
+
+    @media (max-width: 720px) {
+      .brand { font-size: 10px; }
+      .mini { display: none; }
+      .mode-display { top: 50px; }
+      .mode-display h1 { font-size: 15px; }
+      .panel { min-width: 142px; padding: 8px 10px; font-size: 9px; }
+      .diagnostic-panel { display: none; }
+      .mode-chips { bottom: 62px; gap: 4px; }
+      .mode-chip { width: 26px; height: 26px; font-size: 9px; }
+      .controls { bottom: 14px; left: 12px; }
+      .hud-btn { padding: 7px 8px; font-size: 9px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="error-screen" class="screen hidden">
+    <div class="error-box">
+      <div style="font-size:42px;color:var(--red)">⚠</div>
+      <div class="error-title">CAMERA ACCESS REQUIRED</div>
+      <div class="error-body">
+        Please allow camera access, then retry.
+      </div>
+      <button id="retry-camera" class="hud-btn" style="margin-top:16px">
+        RETRY CAMERA ACCESS
+      </button>
+    </div>
+  </div>
+
+  <main class="screen">
+    <div id="camera-wrap">
+      <video id="webcam" autoplay muted playsinline></video>
+      <canvas id="fx-canvas"></canvas>
+      <canvas id="overlay-canvas"></canvas>
+    </div>
+
+    <div class="hud">
+      <div id="scanlines" class="scanlines"></div>
+
+      <div class="topbar">
+        <div class="brand">◈ VISION FRAME SYSTEM</div>
+
+        <div class="top-right">
+          <span id="fps-readout" class="mini">FPS: --</span>
+          <span id="latency-readout" class="mini">AI: -- MS</span>
+          <button id="settings-button" class="icon-btn" title="Settings">⚙</button>
+          <button id="fullscreen-button" class="icon-btn" title="Fullscreen">⛶</button>
+        </div>
+      </div>
+
+      <div class="mode-display">
+        <div id="mode-count" class="eyebrow">VISION MODE 01 / 10</div>
+        <h1 id="mode-name">X-RAY VISION</h1>
+        <div id="mode-subtitle" class="mode-subtitle">X-RAY SYSTEM ONLINE</div>
+      </div>
+
+      <section class="panel tracking-panel">
+        <div class="panel-title">FOUR FINGERTIP TRACKING</div>
+        <div class="line"><i id="left-dot" class="dot"></i>LEFT: <b id="left-state">SEARCHING</b></div>
+        <div class="line"><i id="right-dot" class="dot"></i>RIGHT: <b id="right-state">SEARCHING</b></div>
+        <div class="line"><i id="frame-dot" class="dot"></i>FRAME: <b id="frame-state">STANDBY</b></div>
+        <div class="line">CONF: <b id="confidence-readout">0%</b></div>
+        <div class="line"><b id="gesture-readout">HOLD INDEX + THUMB</b></div>
+      </section>
+
+      <section class="panel frame-panel">
+        <div class="panel-title">FRAME SIZE</div>
+        <div class="line">WIDTH: <b id="frame-width">--</b> PX</div>
+        <div class="line">HEIGHT: <b id="frame-height">--</b> PX</div>
+        <div class="line">ASPECT: <b id="frame-aspect">--</b></div>
+        <div class="line">DIAGONAL: <b id="frame-diagonal">--</b> PX</div>
+        <div class="line">SOURCE: <b>LIVE BEHIND FRAME</b></div>
+      </section>
+
+      <section class="panel diagnostic-panel">
+        <div class="panel-title">DIAGNOSTICS</div>
+        <div class="line">CAM: <b id="camera-status">STARTING</b></div>
+        <div class="line">AI: <b id="ai-status">LOADING</b></div>
+        <div class="line">RENDER: <b id="render-status">READY</b></div>
+      </section>
+
+      <div id="mode-chips" class="mode-chips"></div>
+
+      <div class="controls">
+        <button id="camera-toggle" class="hud-btn">CAMERA ON</button>
+        <button id="mirror-toggle" class="hud-btn">MIRROR: ON</button>
+        <button id="loop-toggle" class="hud-btn">LOOP: ON</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="settings-screen" class="screen hidden">
+    <div class="settings-box">
+      <div class="settings-header">
+        <div class="settings-title">SETTINGS</div>
+        <button id="close-settings" class="icon-btn">✕</button>
+      </div>
+
+      <div class="settings-body">
+        <div class="settings-group">
+          <div class="settings-group-title">FRAME CYCLING</div>
+
+          <div class="settings-row">
+            <label>Automatic cycle speed</label>
+            <input id="cycle-speed" type="range" min="1200" max="7000" step="200">
+          </div>
+
+          <div class="settings-row">
+            <label>Stretch threshold</label>
+            <input id="stretch-threshold" type="range" min="20" max="120" step="5">
+          </div>
+
+          <div class="settings-row">
+            <label>Loop all 10 modes</label>
+            <button id="set-loop" class="toggle"></button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">FAST & SMOOTH TRACKING</div>
+
+          <div class="settings-row">
+            <label>Tracking responsiveness</label>
+            <input id="smoothing" type="range" min="0.25" max="0.85" step="0.05">
+          </div>
+
+          <div class="settings-row">
+            <label>Detection sensitivity</label>
+            <input id="confidence-control" type="range" min="0.15" max="0.70" step="0.05">
+          </div>
+
+          <div class="settings-row">
+            <label>Mirror camera</label>
+            <button id="set-mirror" class="toggle"></button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">HUD & EFFECTS</div>
+
+          <div class="settings-row">
+            <label>Vision effects</label>
+            <button id="set-effects" class="toggle"></button>
+          </div>
+
+          <div class="settings-row">
+            <label>Scan lines</label>
+            <button id="set-scanlines" class="toggle"></button>
+          </div>
+
+          <div class="settings-row">
+            <label>Finger labels</label>
+            <button id="set-labels" class="toggle"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module">
+    const MODES = [
+      ["xray", "X-RAY VISION", "X-RAY SYSTEM ONLINE"],
+      ["uv", "ULTRAVIOLET VISION", "UV SPECTRUM"],
+      ["thermal", "THERMAL VISION", "TEMPERATURE ANALYSIS"],
+      ["night", "NIGHT VISION", "LOW LIGHT MODE"],
+      ["infrared", "INFRARED VISION", "IR SPECTRUM"],
+      ["predator", "PREDATOR VISION", "TARGET LOCK"],
+      ["negative", "NEGATIVE FILM", "NEGATIVE SPECTRUM"],
+      ["wireframe", "WIREFRAME VISION", "WIREFRAME ANALYSIS"],
+      ["holographic", "HOLOGRAPHIC SCAN", "HOLOGRAPHIC SCAN"],
+      ["blueprint", "BLUEPRINT VISION", "BLUEPRINT ANALYSIS"]
+    ];
+
+    const DEFAULTS = {
+      mirror: true,
+      autoCycleMs: 2800,
+      stretchThreshold: 55,
+      smoothing: 0.52,
+      confidence: 0.27,
+      loop: true,
+      effects: true,
+      scanlines: true,
+      labels: true
+    };
+
+    const FILTERS = {
+      xray: "grayscale(1) contrast(2.05) brightness(1.12) invert(1)",
+      uv: "saturate(2.2) hue-rotate(220deg) contrast(1.12)",
+      thermal: "saturate(2.7) hue-rotate(284deg) contrast(1.3)",
+      night: "brightness(1.45) contrast(1.35) hue-rotate(57deg) saturate(2.4)",
+      infrared: "sepia(.45) hue-rotate(145deg) saturate(2.1) contrast(1.25)",
+      predator: "hue-rotate(178deg) saturate(2.1) contrast(1.5)",
+      negative: "invert(1)",
+      wireframe: "grayscale(1) contrast(2.1) brightness(.75)",
+      holographic: "hue-rotate(172deg) saturate(1.8) contrast(1.18)",
+      blueprint: "grayscale(1) invert(1) sepia(.2) hue-rotate(173deg) saturate(2.5)"
+    };
+
+    const $ = id => document.getElementById(id);
+
+    const el = {
+      error: $("error-screen"),
+      retry: $("retry-camera"),
+      cameraWrap: $("camera-wrap"),
+      webcam: $("webcam"),
+      fx: $("fx-canvas"),
+      overlay: $("overlay-canvas"),
+      scanlines: $("scanlines"),
+
+      fps: $("fps-readout"),
+      latency: $("latency-readout"),
+      cameraStatus: $("camera-status"),
+      aiStatus: $("ai-status"),
+      renderStatus: $("render-status"),
+
+      modeCount: $("mode-count"),
+      modeName: $("mode-name"),
+      modeSubtitle: $("mode-subtitle"),
+      chips: $("mode-chips"),
+
+      leftDot: $("left-dot"),
+      rightDot: $("right-dot"),
+      frameDot: $("frame-dot"),
+      leftState: $("left-state"),
+      rightState: $("right-state"),
+      frameState: $("frame-state"),
+      confidence: $("confidence-readout"),
+      gesture: $("gesture-readout"),
+
+      frameWidth: $("frame-width"),
+      frameHeight: $("frame-height"),
+      frameAspect: $("frame-aspect"),
+      frameDiagonal: $("frame-diagonal"),
+
+      cameraToggle: $("camera-toggle"),
+      mirrorToggle: $("mirror-toggle"),
+      loopToggle: $("loop-toggle"),
+      settingsButton: $("settings-button"),
+      fullscreenButton: $("fullscreen-button"),
+
+      settings: $("settings-screen"),
+      closeSettings: $("close-settings"),
+      cycleSpeed: $("cycle-speed"),
+      stretchThreshold: $("stretch-threshold"),
+      smoothing: $("smoothing"),
+      confidenceControl: $("confidence-control"),
+      setLoop: $("set-loop"),
+      setMirror: $("set-mirror"),
+      setEffects: $("set-effects"),
+      setScanlines: $("set-scanlines"),
+      setLabels: $("set-labels"),
+
+      toast: $("toast")
+    };
+
+    function loadSettings() {
+      try {
+        return JSON.parse(localStorage.getItem("vision-frame-settings") || "{}");
+      } catch {
+        return {};
+      }
+    }
+
+    const config = { ...DEFAULTS, ...loadSettings() };
+
+    function saveSettings() {
+      try {
+        localStorage.setItem("vision-frame-settings", JSON.stringify(config));
+      } catch {}
+    }
+
+    const state = {
+      landmarker: null,
+      running: false,
+      videoReady: false,
+      dpr: 1,
+      fxCtx: null,
+      overlayCtx: null,
+
+      mode: 0,
+      lastVideoTime: -1,
+      lastCycle: performance.now(),
+      baselineDiagonal: null,
+      stretchStarted: 0,
+      cooldownUntil: 0,
+
+      confidence: 0,
+      lastInference: 0,
+      fpsSamples: [],
+      lastPaintTime: performance.now(),
+
+      points: {
+        lIndex: null,
+        lThumb: null,
+        rIndex: null,
+        rThumb: null
+      },
+
+      lastSeen: {
+        left: 0,
+        right: 0
+      }
+    };
+
+    const LOST_GRACE_MS = 180;
+    const STRETCH_HOLD_MS = 180;
+
+    const clamp = (number, minimum, maximum) =>
+      Math.max(minimum, Math.min(maximum, number));
+
+    const distance = (a, b) =>
+      Math.hypot(a.x - b.x, a.y - b.y);
+
+    function toast(message) {
+      el.toast.textContent = message;
+      el.toast.classList.remove("hidden");
+
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => {
+        el.toast.classList.add("hidden");
+      }, 1800);
+    }
+
+    function setCanvasSize() {
+      const rect = el.cameraWrap.getBoundingClientRect();
+      state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      [el.fx, el.overlay].forEach(canvas => {
+        canvas.width = Math.round(rect.width * state.dpr);
+        canvas.height = Math.round(rect.height * state.dpr);
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+      });
+
+      state.fxCtx = el.fx.getContext("2d", { alpha: true });
+      state.overlayCtx = el.overlay.getContext("2d", { alpha: true });
+
+      state.fxCtx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      state.overlayCtx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+    }
+
+    function getVideoMetrics() {
+      if (!el.webcam.videoWidth || !el.webcam.videoHeight) return null;
+
+      const rect = el.cameraWrap.getBoundingClientRect();
+      const scale = Math.max(
+        rect.width / el.webcam.videoWidth,
+        rect.height / el.webcam.videoHeight
+      );
+
+      const drawWidth = el.webcam.videoWidth * scale;
+      const drawHeight = el.webcam.videoHeight * scale;
+
+      return {
+        width: rect.width,
+        height: rect.height,
+        scale,
+        drawWidth,
+        drawHeight,
+        offsetX: (rect.width - drawWidth) / 2,
+        offsetY: (rect.height - drawHeight) / 2
+      };
+    }
+
+    function projectLandmark(point) {
+      const metrics = getVideoMetrics();
+      if (!metrics) return null;
+
+      let x =
+        metrics.offsetX +
+        point.x * el.webcam.videoWidth * metrics.scale;
+
+      const y =
+        metrics.offsetY +
+        point.y * el.webcam.videoHeight * metrics.scale;
+
+      if (config.mirror) x = metrics.width - x;
+
+      return { x, y };
+    }
+
+    function isFresh(side, timestamp = performance.now()) {
+      return state.lastSeen[side] > 0 &&
+        timestamp - state.lastSeen[side] <= LOST_GRACE_MS;
+    }
+
+    function smoothPoint(previous, raw) {
+      if (!previous) return { ...raw };
+
+      const movement = distance(previous, raw);
+
+      // Fast response while moving, smooth response while holding still.
+      const alpha = clamp(
+        config.smoothing + Math.min(0.30, movement / 280),
+        config.smoothing,
+        0.93
+      );
+
+      return {
+        x: previous.x + (raw.x - previous.x) * alpha,
+        y: previous.y + (raw.y - previous.y) * alpha
+      };
+    }
+
+    function assignHand(side, hand, timestamp) {
+      const indexKey = side === "left" ? "lIndex" : "rIndex";
+      const thumbKey = side === "left" ? "lThumb" : "rThumb";
+
+      state.points[indexKey] = smoothPoint(
+        state.points[indexKey],
+        hand.indexTip
+      );
+
+      state.points[thumbKey] = smoothPoint(
+        state.points[thumbKey],
+        hand.thumbTip
+      );
+
+      state.lastSeen[side] = timestamp;
+    }
+
+    function removeExpiredHands() {
+      const timestamp = performance.now();
+
+      if (!isFresh("left", timestamp)) {
+        state.points.lIndex = null;
+        state.points.lThumb = null;
+      }
+
+      if (!isFresh("right", timestamp)) {
+        state.points.rIndex = null;
+        state.points.rThumb = null;
+      }
+    }
+
+    function detectHands() {
+      if (
+        !state.landmarker ||
+        !state.videoReady ||
+        el.webcam.readyState < 2
+      ) {
+        removeExpiredHands();
+        return;
+      }
+
+      if (el.webcam.currentTime === state.lastVideoTime) {
+        removeExpiredHands();
+        return;
+      }
+
+      state.lastVideoTime = el.webcam.currentTime;
+
+      const started = performance.now();
+      let result;
+
+      try {
+        result = state.landmarker.detectForVideo(el.webcam, started);
+      } catch {
+        removeExpiredHands();
+        return;
+      }
+
+      state.lastInference = Math.round(performance.now() - started);
+
+      const handedness = result.handednesses || result.handedness || [];
+      const hands = [];
+
+      (result.landmarks || []).forEach((landmarks, index) => {
+        const score = handedness[index]?.[0]?.score || 0;
+        if (score < config.confidence) return;
+
+        const indexTip = projectLandmark(landmarks[8]);
+        const thumbTip = projectLandmark(landmarks[4]);
+        const wrist = projectLandmark(landmarks[0]);
+
+        if (!indexTip || !thumbTip || !wrist) return;
+
+        hands.push({
+          indexTip,
+          thumbTip,
+          score,
+          centerX: (indexTip.x + thumbTip.x + wrist.x) / 3
+        });
+      });
+
+      state.confidence = hands.length
+        ? hands.reduce((total, hand) => total + hand.score, 0) / hands.length
+        : 0;
+
+      const timestamp = performance.now();
+
+      if (hands.length >= 2) {
+        // Screen-left hand becomes left; screen-right hand becomes right.
+        hands.sort((a, b) => a.centerX - b.centerX);
+
+        assignHand("left", hands[0], timestamp);
+        assignHand("right", hands[1], timestamp);
+      } else if (hands.length === 1) {
+        const hand = hands[0];
+
+        const leftCenter = state.points.lIndex && state.points.lThumb
+          ? (state.points.lIndex.x + state.points.lThumb.x) / 2
+          : null;
+
+        const rightCenter = state.points.rIndex && state.points.rThumb
+          ? (state.points.rIndex.x + state.points.rThumb.x) / 2
+          : null;
+
+        let side;
+
+        if (leftCenter !== null && rightCenter !== null) {
+          side = Math.abs(hand.centerX - leftCenter) <=
+            Math.abs(hand.centerX - rightCenter)
+            ? "left"
+            : "right";
+        } else if (leftCenter !== null) {
+          side = "right";
+        } else if (rightCenter !== null) {
+          side = "left";
+        } else {
+          side = hand.centerX < window.innerWidth / 2
+            ? "left"
+            : "right";
+        }
+
+        assignHand(side, hand, timestamp);
+      }
+
+      removeExpiredHands();
+    }
+
+    function allFourTracked() {
+      return isFresh("left") &&
+        isFresh("right") &&
+        state.points.lIndex &&
+        state.points.lThumb &&
+        state.points.rIndex &&
+        state.points.rThumb;
+    }
+
+    function isConvexQuad(points) {
+      let direction = 0;
+
+      for (let index = 0; index < 4; index++) {
+        const a = points[index];
+        const b = points[(index + 1) % 4];
+        const c = points[(index + 2) % 4];
+
+        const cross =
+          (b.x - a.x) * (c.y - b.y) -
+          (b.y - a.y) * (c.x - b.x);
+
+        if (Math.abs(cross) < 0.5) return false;
+
+        const currentDirection = Math.sign(cross);
+
+        if (!direction) {
+          direction = currentDirection;
+        } else if (direction !== currentDirection) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function getFrame() {
+      if (!allFourTracked()) return null;
+
+      const points = state.points;
+
+      // The upper finger on each side becomes the frame's top corner.
+      const [leftTop, leftBottom] =
+        points.lIndex.y <= points.lThumb.y
+          ? [points.lIndex, points.lThumb]
+          : [points.lThumb, points.lIndex];
+
+      const [rightTop, rightBottom] =
+        points.rIndex.y <= points.rThumb.y
+          ? [points.rIndex, points.rThumb]
+          : [points.rThumb, points.rIndex];
+
+      const quad = [leftTop, rightTop, rightBottom, leftBottom];
+
+      if (!isConvexQuad(quad)) return null;
+
+      const minX = Math.min(...quad.map(point => point.x));
+      const maxX = Math.max(...quad.map(point => point.x));
+      const minY = Math.min(...quad.map(point => point.y));
+      const maxY = Math.max(...quad.map(point => point.y));
+
+      const topWidth = distance(leftTop, rightTop);
+      const bottomWidth = distance(leftBottom, rightBottom);
+      const leftHeight = distance(leftTop, leftBottom);
+      const rightHeight = distance(rightTop, rightBottom);
+
+      const width = (topWidth + bottomWidth) / 2;
+      const height = (leftHeight + rightHeight) / 2;
+
+      if (width < 72 || height < 72) return null;
+
+      return {
+        quad,
+        minX,
+        maxX,
+        minY,
+        maxY,
+        width,
+        height,
+        centerX: (minX + maxX) / 2,
+        centerY: (minY + maxY) / 2,
+        diagonal: Math.hypot(width, height),
+        aspect: width / height
+      };
+    }
+
+    function setQuadPath(ctx, points) {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+
+      for (let index = 1; index < points.length; index++) {
+        ctx.lineTo(points[index].x, points[index].y);
+      }
+
+      ctx.closePath();
+    }
+
+    function updateModeCycle(frame) {
+      const timestamp = performance.now();
+
+      if (!frame) {
+        state.baselineDiagonal = null;
+        state.stretchStarted = 0;
+        return;
+      }
+
+      if (timestamp - state.lastCycle >= config.autoCycleMs) {
+        advanceMode();
+        state.lastCycle = timestamp;
+      }
+
+      if (!state.baselineDiagonal) {
+        state.baselineDiagonal = frame.diagonal;
+      }
+
+      const growth =
+        ((frame.diagonal / state.baselineDiagonal) - 1) * 100;
+
+      if (timestamp < state.cooldownUntil) {
+        state.baselineDiagonal +=
+          (frame.diagonal - state.baselineDiagonal) * 0.14;
+        return;
+      }
+
+      if (growth >= config.stretchThreshold) {
+        if (!state.stretchStarted) state.stretchStarted = timestamp;
+
+        if (timestamp - state.stretchStarted >= STRETCH_HOLD_MS) {
+          advanceMode();
+          state.lastCycle = timestamp;
+          state.cooldownUntil = timestamp + 520;
+          state.baselineDiagonal = null;
+          state.stretchStarted = 0;
+          toast("NEXT VISION MODE");
+        }
+      } else {
+        state.stretchStarted = 0;
+        state.baselineDiagonal +=
+          (frame.diagonal - state.baselineDiagonal) * 0.025;
+      }
+    }
+
+    function advanceMode() {
+      const next = state.mode + 1;
+
+      state.mode = next < MODES.length
+        ? next
+        : (config.loop ? 0 : MODES.length - 1);
+
+      renderMode();
+    }
+
+    function renderMode() {
+      const mode = MODES[state.mode];
+
+      el.modeCount.textContent =
+        `VISION MODE ${String(state.mode + 1).padStart(2, "0")} / 10`;
+
+      el.modeName.textContent = mode[1];
+      el.modeSubtitle.textContent = mode[2];
+
+      [...el.chips.children].forEach((chip, index) => {
+        chip.classList.toggle("active", index === state.mode);
+      });
+    }
+
+    function createModeButtons() {
+      MODES.forEach((mode, index) => {
+        const chip = document.createElement("button");
+
+        chip.className = "mode-chip";
+        chip.textContent = String(index + 1).padStart(2, "0");
+
+        chip.onclick = () => {
+          state.mode = index;
+          state.lastCycle = performance.now();
+          renderMode();
+          toast(`MODE ${String(index + 1).padStart(2, "0")} SELECTED`);
+        };
+
+        el.chips.appendChild(chip);
+      });
+
+      renderMode();
+    }
+
+    function drawLiveCameraBehindFrame(ctx) {
+      const metrics = getVideoMetrics();
+      if (!metrics) return;
+
+      // This exactly matches the normal video element:
+      // object-fit: cover + the optional horizontal mirror.
+      if (config.mirror) {
+        ctx.save();
+        ctx.translate(metrics.width, 0);
+        ctx.scale(-1, 1);
+
+        ctx.drawImage(
+          el.webcam,
+          metrics.offsetX,
+          metrics.offsetY,
+          metrics.drawWidth,
+          metrics.drawHeight
+        );
+
+        ctx.restore();
+      } else {
+        ctx.drawImage(
+          el.webcam,
+          metrics.offsetX,
+          metrics.offsetY,
+          metrics.drawWidth,
+          metrics.drawHeight
+        );
+      }
+    }
+
+    function drawScan(ctx, frame, color, speed = 1700) {
+      const y =
+        frame.minY +
+        ((performance.now() % speed) / speed) *
+        (frame.maxY - frame.minY);
+
+      const gradient = ctx.createLinearGradient(0, y - 18, 0, y + 18);
+
+      gradient.addColorStop(0, "transparent");
+      gradient.addColorStop(.5, color);
+      gradient.addColorStop(1, "transparent");
+
+      ctx.save();
+      ctx.globalAlpha = .58;
+      ctx.fillStyle = gradient;
+      ctx.fillRect(
+        frame.minX,
+        y - 18,
+        frame.maxX - frame.minX,
+        36
+      );
+      ctx.restore();
+    }
+
+    function drawGrid(ctx, frame, color, spacing = 20) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+
+      for (let x = frame.minX; x <= frame.maxX; x += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(x, frame.minY);
+        ctx.lineTo(x, frame.maxY);
+        ctx.stroke();
+      }
+
+      for (let y = frame.minY; y <= frame.maxY; y += spacing) {
+        ctx.beginPath();
+        ctx.moveTo(frame.minX, y);
+        ctx.lineTo(frame.maxX, y);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawModeDecorations(ctx, frame, modeKey) {
+      ctx.save();
+
+      if (modeKey === "wireframe") {
+        drawGrid(ctx, frame, "rgba(77, 241, 255, .34)", 18);
+      }
+
+      if (modeKey === "blueprint") {
+        drawGrid(ctx, frame, "rgba(145, 198, 255, .32)", 20);
+      }
+
+      if (["xray", "holographic", "infrared", "predator"].includes(modeKey)) {
+        drawScan(
+          ctx,
+          frame,
+          modeKey === "infrared"
+            ? "rgba(255, 145, 95, .82)"
+            : "rgba(77, 241, 255, .8)"
+        );
+      }
+
+      if (modeKey === "predator") {
+        ctx.strokeStyle = "rgba(130, 255, 200, .8)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(
+          frame.centerX,
+          frame.centerY,
+          Math.min(frame.width, frame.height) * .2,
+          0,
+          Math.PI * 2
+        );
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(232, 252, 255, .82)";
+      ctx.font = '10px "Share Tech Mono", monospace';
+      ctx.fillText(MODES[state.mode][2], frame.minX + 8, frame.minY + 16);
+
+      ctx.restore();
+    }
+
+    function drawFrameOverlay(ctx, frame) {
+      const color = state.stretchStarted ? "#ffab61" : "#4df1ff";
+
+      ctx.save();
+
+      setQuadPath(ctx, frame.quad);
+      ctx.fillStyle = "rgba(77, 241, 255, .055)";
+      ctx.fill();
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      setQuadPath(ctx, frame.quad);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      const labels = [
+        "LEFT TOP",
+        "RIGHT TOP",
+        "RIGHT BASE",
+        "LEFT BASE"
+      ];
+
+      frame.quad.forEach((point, index) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (config.labels) {
+          ctx.fillStyle = "#ecfcff";
+          ctx.font = '9px "Share Tech Mono", monospace';
+          ctx.fillText(labels[index], point.x + 8, point.y - 8);
+        }
+      });
+
+      ctx.fillStyle = color;
+      ctx.font = '10px "Share Tech Mono", monospace';
+      ctx.fillText(
+        `FRAME ${String(state.mode + 1).padStart(2, "0")} · LIVE EFFECT WINDOW`,
+        frame.minX,
+        Math.max(15, frame.minY - 12)
+      );
+
+      if (state.stretchStarted) {
+        const progress = clamp(
+          (performance.now() - state.stretchStarted) / STRETCH_HOLD_MS,
+          0,
+          1
+        );
+
+        const filled = Math.round(progress * 10);
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffab61";
+        ctx.fillText(
+          `STRETCH TO CHANGE  ${"█".repeat(filled)}${"░".repeat(10 - filled)}`,
+          frame.centerX,
+          Math.max(16, frame.minY - 30)
+        );
+        ctx.textAlign = "left";
+      }
+
+      ctx.restore();
+    }
+
+    function updateHud(frame) {
+      const leftLocked = isFresh("left");
+      const rightLocked = isFresh("right");
+
+      el.leftDot.classList.toggle("locked", leftLocked);
+      el.rightDot.classList.toggle("locked", rightLocked);
+      el.frameDot.classList.toggle("locked", !!frame);
+
+      el.leftState.textContent = leftLocked ? "LOCKED" : "SEARCHING";
+      el.rightState.textContent = rightLocked ? "LOCKED" : "SEARCHING";
+      el.frameState.textContent = frame ? "ACTIVE" : "ALIGN FINGERS";
+      el.confidence.textContent = `${Math.round(state.confidence * 100)}%`;
+
+      el.gesture.textContent = frame
+        ? "STRETCH TO CHANGE MODE"
+        : "HOLD INDEX + THUMB";
+
+      el.renderStatus.textContent = frame
+        ? "LIVE WINDOW"
+        : "READY";
+
+      if (frame) {
+        el.frameWidth.textContent = Math.round(frame.width);
+        el.frameHeight.textContent = Math.round(frame.height);
+        el.frameAspect.textContent = frame.aspect.toFixed(2);
+        el.frameDiagonal.textContent = Math.round(frame.diagonal);
+      } else {
+        el.frameWidth.textContent = "--";
+        el.frameHeight.textContent = "--";
+        el.frameAspect.textContent = "--";
+        el.frameDiagonal.textContent = "--";
+      }
+    }
+
+    function render() {
+      const fxCtx = state.fxCtx;
+      const overlayCtx = state.overlayCtx;
+
+      if (!fxCtx || !overlayCtx) return;
+
+      const width = el.fx.width / state.dpr;
+      const height = el.fx.height / state.dpr;
+
+      fxCtx.clearRect(0, 0, width, height);
+      overlayCtx.clearRect(0, 0, width, height);
+
+      const frame = getFrame();
+      updateModeCycle(frame);
+
+      if (frame && state.videoReady) {
+        fxCtx.save();
+
+        // Only pixels physically behind the four-finger frame are drawn here.
+        // No triangle warp. No duplicate body. No crack in the image.
+        setQuadPath(fxCtx, frame.quad);
+        fxCtx.clip();
+
+        if (config.effects) {
+          fxCtx.filter = FILTERS[MODES[state.mode][0]];
+          drawLiveCameraBehindFrame(fxCtx);
+          fxCtx.filter = "none";
+        }
+
+        drawModeDecorations(fxCtx, frame, MODES[state.mode][0]);
+        fxCtx.restore();
+
+        drawFrameOverlay(overlayCtx, frame);
+      }
+
+      updateHud(frame);
+    }
+
+    function loop() {
+      if (!state.running) return;
+
+      detectHands();
+      render();
+
+      const timestamp = performance.now();
+      const frameDuration = timestamp - state.lastPaintTime;
+
+      state.lastPaintTime = timestamp;
+      state.fpsSamples.push(1000 / Math.max(frameDuration, 1));
+
+      if (state.fpsSamples.length > 30) {
+        state.fpsSamples.shift();
+      }
+
+      const average = Math.round(
+        state.fpsSamples.reduce((sum, fps) => sum + fps, 0) /
+        state.fpsSamples.length
+      );
+
+      el.fps.textContent = `FPS: ${average}`;
+      el.latency.textContent = `AI: ${state.lastInference} MS`;
+
+      requestAnimationFrame(loop);
+    }
+
+    async function loadHandTracker() {
+      try {
+        const { HandLandmarker, FilesetResolver } = await import(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"
+        );
+
+        const fileset = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+
+        const options = {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 2,
+          minHandDetectionConfidence: 0.28,
+          minHandPresenceConfidence: 0.28,
+          minTrackingConfidence: 0.28
+        };
+
+        try {
+          state.landmarker = await HandLandmarker.createFromOptions(
+            fileset,
+            options
+          );
+        } catch {
+          options.baseOptions.delegate = "CPU";
+
+          state.landmarker = await HandLandmarker.createFromOptions(
+            fileset,
+            options
+          );
+        }
+
+        el.aiStatus.textContent = "OK";
+      } catch (error) {
+        console.error(error);
+        el.aiStatus.textContent = "FAIL";
+        toast("HAND TRACKER COULD NOT LOAD");
+      }
+    }
+
+    async function startCamera() {
+      try {
+        const oldStream = el.webcam.srcObject;
+
+        if (oldStream) {
+          oldStream.getTracks().forEach(track => track.stop());
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 60, max: 60 }
+          },
+          audio: false
+        });
+
+        el.webcam.srcObject = stream;
+
+        await new Promise(resolve => {
+          el.webcam.onloadedmetadata = resolve;
+        });
+
+        await el.webcam.play();
+
+        state.videoReady = true;
+        el.cameraStatus.textContent = "OK";
+        el.error.classList.add("hidden");
+
+        if (!state.running) {
+          state.running = true;
+          state.lastCycle = performance.now();
+          requestAnimationFrame(loop);
+        }
+      } catch (error) {
+        console.error(error);
+        state.videoReady = false;
+        el.cameraStatus.textContent = "FAIL";
+        el.error.classList.remove("hidden");
+      }
+    }
+
+    function updateToggle(button, enabled) {
+      button.classList.toggle("on", enabled);
+      button.textContent = enabled ? "ON" : "OFF";
+    }
+
+    function syncMirror() {
+      el.webcam.style.transform = config.mirror
+        ? "scaleX(-1)"
+        : "scaleX(1)";
+
+      el.mirrorToggle.textContent =
+        `MIRROR: ${config.mirror ? "ON" : "OFF"}`;
+    }
+
+    function initializeSettings() {
+      el.cycleSpeed.value = config.autoCycleMs;
+      el.stretchThreshold.value = config.stretchThreshold;
+      el.smoothing.value = config.smoothing;
+      el.confidenceControl.value = config.confidence;
+
+      el.cycleSpeed.oninput = event => {
+        config.autoCycleMs = Number(event.target.value);
+        saveSettings();
+      };
+
+      el.stretchThreshold.oninput = event => {
+        config.stretchThreshold = Number(event.target.value);
+        saveSettings();
+      };
+
+      el.smoothing.oninput = event => {
+        config.smoothing = Number(event.target.value);
+        saveSettings();
+      };
+
+      el.confidenceControl.oninput = event => {
+        config.confidence = Number(event.target.value);
+        saveSettings();
+      };
+
+      const toggles = [
+        [el.setLoop, "loop"],
+        [el.setMirror, "mirror"],
+        [el.setEffects, "effects"],
+        [el.setScanlines, "scanlines"],
+        [el.setLabels, "labels"]
+      ];
+
+      toggles.forEach(([button, key]) => {
+        updateToggle(button, config[key]);
+
+        button.onclick = () => {
+          config[key] = !config[key];
+
+          if (key === "mirror") syncMirror();
+
+          if (key === "scanlines") {
+            el.scanlines.classList.toggle("hidden", !config.scanlines);
+          }
+
+          updateToggle(button, config[key]);
+          saveSettings();
+        };
+      });
+    }
+
+    function initializeControls() {
+      el.settingsButton.onclick = () => {
+        el.settings.classList.remove("hidden");
+      };
+
+      el.closeSettings.onclick = () => {
+        el.settings.classList.add("hidden");
+      };
+
+      el.settings.onclick = event => {
+        if (event.target === el.settings) {
+          el.settings.classList.add("hidden");
+        }
+      };
+
+      el.fullscreenButton.onclick = () => {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          document.documentElement.requestFullscreen()
+            .catch(() => toast("FULLSCREEN UNAVAILABLE"));
+        }
+      };
+
+      el.cameraToggle.onclick = () => {
+        const stream = el.webcam.srcObject;
+        if (!stream) return;
+
+        const enabled = stream.getVideoTracks().some(track => track.enabled);
+
+        stream.getVideoTracks().forEach(track => {
+          track.enabled = !enabled;
+        });
+
+        el.cameraToggle.textContent = enabled
+          ? "CAMERA OFF"
+          : "CAMERA ON";
+      };
+
+      el.mirrorToggle.onclick = () => {
+        config.mirror = !config.mirror;
+        syncMirror();
+        updateToggle(el.setMirror, config.mirror);
+        saveSettings();
+      };
+
+      el.loopToggle.onclick = () => {
+        config.loop = !config.loop;
+        el.loopToggle.textContent = `LOOP: ${config.loop ? "ON" : "OFF"}`;
+        updateToggle(el.setLoop, config.loop);
+        saveSettings();
+      };
+
+      el.retry.onclick = startCamera;
+    }
+
+    setCanvasSize();
+    window.addEventListener("resize", setCanvasSize);
+
+    createModeButtons();
+    initializeSettings();
+    initializeControls();
+    syncMirror();
+
+    el.loopToggle.textContent = `LOOP: ${config.loop ? "ON" : "OFF"}`;
+    el.scanlines.classList.toggle("hidden", !config.scanlines);
+
+    Promise.all([
+      loadHandTracker(),
+      startCamera()
+    ]);
+  </script>
+</body>
+</html>
